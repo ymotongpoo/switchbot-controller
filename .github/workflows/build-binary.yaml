@@ -13,7 +13,7 @@
 # limitations under the License.
 
 name: build-binary
-run-name: Build custom OpenTelemetry Collector
+run-name: Build Switchbot Controller
 on:
   push:
     branches:
@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Go ${{ matrix-go-version }}
+      - name: Setup Go ${{ matrix.go-version }}
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
