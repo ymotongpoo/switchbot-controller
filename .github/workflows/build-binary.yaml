@@ -20,7 +20,7 @@ on:
       - "**"
 
 jobs:
-  setup-ocb:
+  build-binary:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -34,5 +34,5 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Display Go Version
         run: go version
-      - name: Install OCB
-        run: GO111MODULE=on go build -o switchbot
+      - name: Build binary
+        run: GO111MODULE=on go build -o switchbot-${{ matrix.go-version }}
