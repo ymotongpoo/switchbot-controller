@@ -49,6 +49,6 @@ func main() {
 		if err != nil {
 			continue
 		}
-		fmt.Println(b)
+		fmt.Println(string(b))
 	}
 }
