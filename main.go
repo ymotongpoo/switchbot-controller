@@ -44,7 +44,7 @@ func main() {
 	c := switchbot.New(openToken, secretKey)
 	ctx := context.Background()
 	ds, _, _ := c.Device().List(ctx)
-	for d := range ds {
+	for _, d := range ds {
 		b, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			continue
