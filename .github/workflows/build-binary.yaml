@@ -36,3 +36,10 @@ jobs:
         run: go version
       - name: Build binary
         run: GO111MODULE=on go build -o switchbot-go${{ matrix.go-version }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: switchbot-go${{ matrix.go-version }}
+          path: switchbot-go${{ matrix.go-version }}
+          retention-days: 1
