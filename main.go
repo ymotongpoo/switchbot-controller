@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nasa9084/go-switchbot"
+	switchbot "github.com/nasa9084/go-switchbot/v3"
 )
 
 var (
@@ -37,18 +37,36 @@ func init() {
 	}
 	openToken = os.Getenv("SWITCHBOT_TOKEN")
 	secretKey = os.Getenv("SWITCHBOT_SECRET")
+
+	if openToken == "" {
+		log.Fatalf("add SWITCHBOT_TOKEN environment variable in .env")
+	}
+	if secretKey == "" {
+		log.Fatalf("add SWITCHBOT_SECRET environment variable in .env")
+	}
 }
 
 func main() {
-
 	c := switchbot.New(openToken, secretKey)
 	ctx := context.Background()
-	ds, _, _ := c.Device().List(ctx)
+	svc := c.Device()
+	ds, _, _ := svc.List(ctx)
 	for _, d := range ds {
 		b, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			continue
 		}
 		fmt.Println(string(b))
+
+		switch d.Type {
+		case switchbot.Hub2, switchbot.WoIOSensor:
+			s, err := svc.Status(ctx, d.ID)
+			if err != nil {
+				log.Printf("failed to fetch status of %v", d.ID)
+				continue
+			}
+			fmt.Printf("id: %v, temperature: %v, humidity: %v", d.ID, s.Temperature, s.Humidity)
+		default:
+		}
 	}
 }
