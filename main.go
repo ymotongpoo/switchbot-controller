@@ -15,10 +15,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -33,40 +35,89 @@ var (
 
 func init() {
 	if err := godotenv.Load(); err != nil {
-		log.Fatalf("failed to load .env file: %v", err)
+		slog.Error(fmt.Sprintf("failed to load .env file: %v", err))
+		os.Exit(1)
 	}
 	openToken = os.Getenv("SWITCHBOT_TOKEN")
 	secretKey = os.Getenv("SWITCHBOT_SECRET")
 
 	if openToken == "" {
-		log.Fatalf("add SWITCHBOT_TOKEN environment variable in .env")
+		slog.Error("add SWITCHBOT_TOKEN environment variable in .env")
+		os.Exit(1)
 	}
 	if secretKey == "" {
-		log.Fatalf("add SWITCHBOT_SECRET environment variable in .env")
+		slog.Error("add SWITCHBOT_SECRET environment variable in .env")
+		os.Exit(1)
 	}
 }
 
-func main() {
-	c := switchbot.New(openToken, secretKey)
-	ctx := context.Background()
-	svc := c.Device()
-	ds, _, _ := svc.List(ctx)
-	for _, d := range ds {
+type SwitchBotController struct {
+	cli   *switchbot.Client
+	ctx   context.Context
+	pdevs []switchbot.Device
+	idevs []switchbot.InfraredDevice
+}
+
+func NewSwitchBotController(openToken, secretkey string, opts ...switchbot.Option) *SwitchBotController {
+	return &SwitchBotController{
+		cli: switchbot.New(openToken, secretkey, opts...),
+		ctx: context.Background(),
+	}
+}
+
+func (c *SwitchBotController) refreshDevices() error {
+	svc := c.cli.Device()
+	pdevs, idevs, err := svc.List(c.ctx)
+	if err != nil {
+		return err
+	}
+	c.pdevs = pdevs
+	c.idevs = idevs
+	return nil
+}
+
+func (c *SwitchBotController) deviceListHandler(w http.ResponseWriter, r *http.Request) {
+	c.refreshDevices()
+
+	var buf bytes.Buffer
+	for _, d := range c.pdevs {
 		b, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			continue
 		}
-		fmt.Println(string(b))
+		buf.Write(b)
+	}
+	buf.WriteTo(w)
+}
 
+func (c *SwitchBotController) metricsHandler(w http.ResponseWriter, r *http.Request) {
+	svc := c.cli.Device()
+
+	var buf bytes.Buffer
+	for _, d := range c.pdevs {
 		switch d.Type {
 		case switchbot.Hub2, switchbot.WoIOSensor:
-			s, err := svc.Status(ctx, d.ID)
+			s, err := svc.Status(c.ctx, d.ID)
 			if err != nil {
-				log.Printf("failed to fetch status of %v", d.ID)
+				slog.Info(fmt.Sprintf("failed to fetch status of %v", d.ID))
 				continue
 			}
-			fmt.Printf("id: %v, temperature: %v, humidity: %v", d.ID, s.Temperature, s.Humidity)
+			buf.WriteString(fmt.Sprintf("id: %v, temperature: %v, humidity: %v", d.ID, s.Temperature, s.Humidity))
 		default:
 		}
+	}
+	buf.WriteTo(w)
+}
+
+func main() {
+	c := NewSwitchBotController(openToken, secretKey)
+	c.refreshDevices()
+
+	http.HandleFunc("/devices", c.deviceListHandler)
+	http.HandleFunc("/metrics", c.metricsHandler)
+	if err := http.ListenAndServe(":8888", nil); err != nil {
+		slog.Error(fmt.Sprintf("error running HTTP server: %v", err))
+		os.Exit(1)
+		return
 	}
 }
