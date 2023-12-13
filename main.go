@@ -102,7 +102,7 @@ func (c *SwitchBotController) metricsHandler(w http.ResponseWriter, r *http.Requ
 				slog.Info(fmt.Sprintf("failed to fetch status of %v", d.ID))
 				continue
 			}
-			buf.WriteString(fmt.Sprintf("id: %v, temperature: %v, humidity: %v", d.ID, s.Temperature, s.Humidity))
+			buf.WriteString(fmt.Sprintf("id: %v, temperature: %v, humidity: %v\n", d.ID, s.Temperature, s.Humidity))
 		default:
 		}
 	}
