@@ -15,16 +15,13 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/joho/godotenv"
-	switchbot "github.com/nasa9084/go-switchbot/v3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -51,70 +48,12 @@ func init() {
 	}
 }
 
-type SwitchBotController struct {
-	cli   *switchbot.Client
-	ctx   context.Context
-	pdevs []switchbot.Device
-	idevs []switchbot.InfraredDevice
-}
-
-func NewSwitchBotController(openToken, secretkey string, opts ...switchbot.Option) *SwitchBotController {
-	return &SwitchBotController{
-		cli: switchbot.New(openToken, secretkey, opts...),
-		ctx: context.Background(),
-	}
-}
-
-func (c *SwitchBotController) refreshDevices() error {
-	svc := c.cli.Device()
-	pdevs, idevs, err := svc.List(c.ctx)
-	if err != nil {
-		return err
-	}
-	c.pdevs = pdevs
-	c.idevs = idevs
-	return nil
-}
-
-func (c *SwitchBotController) deviceListHandler(w http.ResponseWriter, r *http.Request) {
-	c.refreshDevices()
-
-	var buf bytes.Buffer
-	for _, d := range c.pdevs {
-		b, err := json.MarshalIndent(d, "", "  ")
-		if err != nil {
-			continue
-		}
-		buf.Write(b)
-	}
-	buf.WriteTo(w)
-}
-
-func (c *SwitchBotController) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	svc := c.cli.Device()
-
-	var buf bytes.Buffer
-	for _, d := range c.pdevs {
-		switch d.Type {
-		case switchbot.Hub2, switchbot.WoIOSensor:
-			s, err := svc.Status(c.ctx, d.ID)
-			if err != nil {
-				slog.Info(fmt.Sprintf("failed to fetch status of %v", d.ID))
-				continue
-			}
-			buf.WriteString(fmt.Sprintf("id: %v, temperature: %v, humidity: %v\n", d.ID, s.Temperature, s.Humidity))
-		default:
-		}
-	}
-	buf.WriteTo(w)
-}
-
 func main() {
 	c := NewSwitchBotController(openToken, secretKey)
 	c.refreshDevices()
 
 	http.HandleFunc("/devices", c.deviceListHandler)
-	http.HandleFunc("/metrics", c.metricsHandler)
+	http.Handle("/metrics", promhttp.Handler())
 	if err := http.ListenAndServe(":8888", nil); err != nil {
 		slog.Error(fmt.Sprintf("error running HTTP server: %v", err))
 		os.Exit(1)
