@@ -25,6 +25,7 @@ import (
 
 	switchbot "github.com/nasa9084/go-switchbot/v3"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	apimetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -43,6 +44,20 @@ type SwitchBotController struct {
 	humidGuage apimetric.Int64ObservableGauge
 }
 
+func initOpenTelemetry(ctx context.Context, otlpOps ...otlpmetricgrpc.Option) apimetric.Meter {
+	pexporter, err := prometheus.New()
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to initialize Prometheus exporter: %v", err))
+	}
+	oexporter, err := otlpmetricgrpc.New(ctx, otlpOps...)
+	provider := metric.NewMeterProvider(
+		metric.WithReader(pexporter),
+		metric.WithReader(metric.NewPeriodicReader(oexporter)),
+	)
+	meter := provider.Meter(meterName)
+	return meter
+}
+
 // NewSwitchBotController initialize a controller instance with given token and secret.
 // Also it holds OpenTelemetry metrics related objects.
 func NewSwitchBotController(openToken, secretkey string, opts ...switchbot.Option) *SwitchBotController {
@@ -50,14 +65,8 @@ func NewSwitchBotController(openToken, secretkey string, opts ...switchbot.Optio
 		cli: switchbot.New(openToken, secretkey, opts...),
 		ctx: context.Background(),
 	}
-
-	exporter, err := prometheus.New()
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to initialize Prometheus exporter: %v", err))
-	}
-	provider := metric.NewMeterProvider(metric.WithReader(exporter))
-	meter := provider.Meter(meterName)
-
+	meter := initOpenTelemetry(sbc.ctx)
+	var err error
 	sbc.tempGuage, err = meter.Float64ObservableGauge(
 		"temperature",
 		apimetric.WithDescription("temperarature"),
