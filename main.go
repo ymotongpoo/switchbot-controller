@@ -54,7 +54,7 @@ func main() {
 
 	http.HandleFunc("/devices", c.deviceListHandler)
 	http.Handle("/metrics", promhttp.Handler())
-	if err := http.ListenAndServe(":8888", nil); err != nil {
+	if err := http.ListenAndServe(":18888", nil); err != nil {
 		slog.Error(fmt.Sprintf("error running HTTP server: %v", err))
 		os.Exit(1)
 		return
